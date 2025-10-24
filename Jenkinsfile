@@ -13,7 +13,9 @@ pipeline {
     NS_ING  = 'ingress-nginx'
     REL_DASH = 'kubernetes-dashboard'
     TG_CHAT = '180424264'
-    DASH_HOST = 'dashboard.lan'   // можно не использовать, если пока ходишь по IP
+    DASH_HOST = 'dashboard.lan'
+    PATH = "${WORKSPACE}/bin:${PATH}"
+    HELM_VERSION = 'v3.14.4'   
   }
 
   stages {
@@ -21,14 +23,31 @@ pipeline {
       steps { checkout scm }
     }
 
-    stage('Setup kubecontext & helm') {
+    stage('Setup kubecontext & helm (no-sudo)') {
       steps {
         withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
           sh '''
             set -e
             kubectl version --client=true
             kubectl config current-context || true
-            helm version || (curl -sSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash)
+
+            if ! command -v helm >/dev/null 2>&1; then
+              echo "Installing helm ${HELM_VERSION} locally into $WORKSPACE/bin ..."
+              mkdir -p "$WORKSPACE/bin"
+              OS=linux
+              ARCH=amd64
+              URL="https://get.helm.sh/helm-${HELM_VERSION}-${OS}-${ARCH}.tar.gz"
+              TMP="$(mktemp -d)"
+              curl -sSL "$URL" -o "$TMP/helm.tgz"
+              tar -xzf "$TMP/helm.tgz" -C "$TMP"
+              mv "$TMP/${OS}-${ARCH}/helm" "$WORKSPACE/bin/helm"
+              chmod +x "$WORKSPACE/bin/helm"
+              rm -rf "$TMP"
+              helm version
+            else
+              echo "helm already present:"
+              helm version
+            fi
           '''
         }
       }
@@ -43,7 +62,6 @@ pipeline {
             helm repo add metallb https://metallb.github.io/metallb
             helm repo update
             helm upgrade --install metallb metallb/metallb -n $NS_MLB
-            # в репо должен быть metallb/metallb-pool.yaml с 192.168.31.248-192.168.31.250
             kubectl apply -f metallb/metallb-pool.yaml
           '''
         }
@@ -64,10 +82,17 @@ pipeline {
             # ждём EXTERNAL-IP от MetalLB
             for i in {1..90}; do
               IP=$(kubectl -n $NS_ING get svc ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
-              [ -n "$IP" ] && echo "$IP" > ingress_ip.txt && break
+              if [ -n "$IP" ]; then
+                echo "$IP" > ingress_ip.txt
+                break
+              fi
               sleep 2
             done
-            [ -s ingress_ip.txt ] || { echo "No EXTERNAL-IP from MetalLB"; kubectl -n $NS_ING get svc ingress-nginx-controller -o wide; exit 1; }
+            if [ ! -s ingress_ip.txt ]; then
+              kubectl -n $NS_ING get svc ingress-nginx-controller -o wide || true
+              echo "No EXTERNAL-IP from MetalLB"
+              exit 1
+            fi
           '''
         }
       }
@@ -125,11 +150,11 @@ pipeline {
     success {
       withCredentials([string(credentialsId: 'telegram-bot-token', variable: 'TG')]) {
         sh '''
-          set -e
-          IP=$(cat ingress_ip.txt)
-          URL_IP=$(cat url_ip.txt)
-          URL_HOST=$(cat url_host.txt)
-          TOKEN_SHORT=$(head -c 40 token.txt || true)
+          set +e
+          IP=$(cat ingress_ip.txt 2>/dev/null)
+          URL_IP=$(cat url_ip.txt 2>/dev/null)
+          URL_HOST=$(cat url_host.txt 2>/dev/null)
+          TOKEN_SHORT=$(head -c 40 token.txt 2>/dev/null)
 
           curl -s -X POST -H 'Content-Type: application/json' \
             --data-binary @- "https://api.telegram.org/bot${TG}/sendMessage" <<EOF
@@ -141,11 +166,12 @@ EOF
     failure {
       withCredentials([string(credentialsId: 'telegram-bot-token', variable: 'TG')]) {
         sh '''
+          set +e
           curl -s -X POST -H 'Content-Type: application/json' \
             --data-binary @- "https://api.telegram.org/bot${TG}/sendMessage" <<EOF
 {"chat_id":"$TG_CHAT","text":"❌ FAILED: ${JOB_NAME} #${BUILD_NUMBER} (см. логи Jenkins)"}
 EOF
-        ''' || true
+        '''
       }
     }
   }
