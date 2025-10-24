@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dex-config
+  namespace: auth
+data:
+  config.yaml: |
+    issuer: http://dex.lan/dex
+    storage:
+      type: memory
+    web:
+      http: 0.0.0.0:5556
+    oauth2:
+      responseTypes: ["code", "token", "id_token"]
+      skipApprovalScreen: true
+    staticClients:
+    - id: kubernetes-dashboard
+      name: Kubernetes Dashboard
+      secret: dashboard-secret
+      redirectURIs:
+      - http://dashboard.lan/oauth2/callback
+    staticPasswords:
+    # user: admin@example.com  pass: admin123
+    - email: admin@example.com
+      hash: $2a$10$QmH2wEk2n3dBq2qS0e9t/.F3brkH2cF1bGmV5qC3u3mVUJ0wQhI9i
+      username: admin
+      userID: 11111111-1111-1111-1111-111111111111
+      groups: ["k8s-admins"]
