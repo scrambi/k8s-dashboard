@@ -1,0 +1,6 @@
+kong:
+  proxy:
+    http:
+      enabled: true
+    tls:
+      enabled: false
