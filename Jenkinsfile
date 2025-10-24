@@ -8,11 +8,11 @@ pipeline {
   }
 
   environment {
-    NS_DASH = 'kubernetes-dashboard'
-    NS_MLB  = 'metallb-system'
-    NS_ING  = 'ingress-nginx'
-    REL_DASH = 'kubernetes-dashboard'
-    TG_CHAT = '180424264'
+    NS_DASH   = 'kubernetes-dashboard'
+    NS_MLB    = 'metallb-system'
+    NS_ING    = 'ingress-nginx'
+    REL_DASH  = 'kubernetes-dashboard'
+    TG_CHAT   = '180424264'
     DASH_HOST = 'dashboard.lan'
     PATH = "${WORKSPACE}/bin:${PATH}"
     HELM_VERSION = 'v3.14.4'   
@@ -59,10 +59,44 @@ pipeline {
           sh '''
             set -e
             kubectl create namespace $NS_MLB || true
+
             helm repo add metallb https://metallb.github.io/metallb
             helm repo update
             helm upgrade --install metallb metallb/metallb -n $NS_MLB
-            kubectl apply -f metallb/metallb-pool.yaml
+
+            echo "[wait] metallb-controller rollout..."
+            kubectl -n $NS_MLB rollout status deploy/metallb-controller --timeout=180s
+
+            echo "[wait] metallb-webhook-service endpoints (served by controller)..."
+            for i in {1..90}; do
+              EP=$(kubectl -n $NS_MLB get endpoints metallb-webhook-service -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null || true)
+              PORT=$(kubectl -n $NS_MLB get endpoints metallb-webhook-service -o jsonpath='{.subsets[0].ports[0].port}' 2>/dev/null || true)
+              if [ -n "$EP" ] && [ "$PORT" = "9443" ]; then
+                echo "[ok] endpoints ready: $EP:$PORT"
+                break
+              fi
+              echo "[wait] no endpoints yet..."
+              sleep 2
+            done
+
+            # небольшой буфер
+            sleep 2
+
+            echo "[apply] metallb-pool.yaml (with retries)"
+            n=0
+            until kubectl apply -f metallb/metallb-pool.yaml; do
+              n=$((n+1))
+              if [ $n -ge 5 ]; then
+                echo "ERROR: failed to apply metallb-pool.yaml after ${n} attempts"
+                kubectl -n $NS_MLB get pods -o wide || true
+                kubectl -n $NS_MLB get svc metallb-webhook-service -o wide || true
+                kubectl -n $NS_MLB describe deploy metallb-controller || true
+                kubectl -n $NS_MLB logs deploy/metallb-controller --all-containers --tail=200 || true
+                exit 1
+              fi
+              echo "[retry $n/5] waiting for webhook admission to be ready..."
+              sleep 3
+            done
           '''
         }
       }
