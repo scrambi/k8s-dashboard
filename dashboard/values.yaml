@@ -1,6 +1,41 @@
 kong:
+  # Явно DB-less и отключаем admin API
+  env:
+    KONG_DATABASE: "off"
+    KONG_ADMIN_LISTEN: "off"
+    # слушаем только TCP-порты, без unix-сокетов
+    KONG_PROXY_LISTEN: "0.0.0.0:8000"
+    KONG_STATUS_LISTEN: "0.0.0.0:8100"
+    # на всякий случай полностью вырубаем stream-листенеры
+    KONG_STREAM_LISTEN: "off"
+
   proxy:
     http:
       enabled: true
     tls:
       enabled: false
+
+  # Пробы на status endpoint
+  readinessProbe:
+    httpGet:
+      path: /status
+      port: 8100
+  livenessProbe:
+    httpGet:
+      path: /status
+      port: 8100
+
+  # Правки прав/uid (часто помогают с префиксом)
+  podSecurityContext:
+    fsGroup: 1000
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+    allowPrivilegeEscalation: false
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
