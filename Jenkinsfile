@@ -79,9 +79,7 @@ pipeline {
               sleep 2
             done
 
-            # небольшой буфер
             sleep 2
-
             echo "[apply] metallb-pool.yaml (with retries)"
             n=0
             until kubectl apply -f metallb/metallb-pool.yaml; do
@@ -132,16 +130,66 @@ pipeline {
       }
     }
 
-    stage('Install/Update Kubernetes Dashboard') {
+    stage('Install/Update Kubernetes Dashboard (with robust retries)') {
       steps {
         withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
           sh '''
             set -e
-            helm repo add kubernetes-dashboard https://kubernetes.github.io/dashboard
-            helm repo update
-            helm upgrade --install $REL_DASH kubernetes-dashboard/kubernetes-dashboard \
-              -n $NS_DASH --create-namespace \
-              -f dashboard/values.yaml
+
+            echo "[try#1] helm repo add/update (10 retries)..."
+            ok=""
+            for i in {1..10}; do
+              if helm repo add kubernetes-dashboard https://kubernetes.github.io/dashboard && helm repo update; then
+                ok=1; break
+              fi
+              echo "[retry $i/10] repo add/update failed, sleep 3s..."
+              sleep 3
+            done
+
+            if [ -n "$ok" ]; then
+              echo "[install] via repo alias kubernetes-dashboard/kubernetes-dashboard (10 retries)"
+              for i in {1..10}; do
+                if helm upgrade --install $REL_DASH kubernetes-dashboard/kubernetes-dashboard \
+                  -n $NS_DASH --create-namespace \
+                  -f dashboard/values.yaml; then
+                  break
+                fi
+                echo "[retry $i/10] helm upgrade failed, sleep 3s..."
+                sleep 3
+              done
+            else
+              echo "[try#2] falling back to --repo (no repo add), 10 retries..."
+              ok2=""
+              for i in {1..10}; do
+                if helm upgrade --install $REL_DASH kubernetes-dashboard \
+                  --repo https://kubernetes.github.io/dashboard \
+                  -n $NS_DASH --create-namespace \
+                  -f dashboard/values.yaml; then
+                  ok2=1; break
+                fi
+                echo "[retry $i/10] helm upgrade --repo failed, sleep 3s..."
+                sleep 3
+              done
+
+              if [ -z "$ok2" ]; then
+                echo "[try#3] final fallback: helm pull + local install"
+                rm -f kubernetes-dashboard-*.tgz || true
+                for i in {1..10}; do
+                  if helm pull kubernetes-dashboard --repo https://kubernetes.github.io/dashboard; then
+                    CHART=$(ls -1 kubernetes-dashboard-*.tgz | head -n1 || true)
+                    if [ -n "$CHART" ]; then
+                      if helm upgrade --install $REL_DASH "$CHART" \
+                        -n $NS_DASH --create-namespace \
+                        -f dashboard/values.yaml; then
+                        break
+                      fi
+                    fi
+                  fi
+                  echo "[retry $i/10] pull/install failed, sleep 3s..."
+                  sleep 3
+                done
+              fi
+            fi
 
             kubectl apply -f dashboard/rbac-admin.yaml
 
