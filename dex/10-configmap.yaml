@@ -5,27 +5,27 @@ metadata:
   namespace: auth
 data:
   config.yaml: |
-    issuer: http://dex.lan/dex
+    issuer: "http://dex.lan/dex"
     storage:
-      type: memory
+      type: "memory"
     web:
-      http: 0.0.0.0:5556
+      http: "0.0.0.0:5556"
 
     # включаем встроенную БД пользователей
     enablePasswordDB: true
 
     # OIDC-клиент для Kubernetes Dashboard
     staticClients:
-      - id: kubernetes-dashboard
-        name: Kubernetes Dashboard
-        secret: dashboard-secret
+      - id: "kubernetes-dashboard"
+        name: "Kubernetes Dashboard"
+        secret: "dashboard-secret"
         redirectURIs:
-          - http://dashboard.lan/oauth2/callback
+          - "http://dashboard.lan/oauth2/callback"
 
-    # Тестовый пользователь (логин admin@local, см. hash ниже)
+    # Тестовый пользователь (логин: admin@local / пароль: admin — если хэш соответствует)
     staticPasswords:
-      - email: admin@local
-        username: admin
-        userID: 1234567890
-        # bcrypt-хэш пароля "admin"
-        hash: $2y$10$ZPj6z6C9x6OQ5YcJzS3Z2uXb9t7D5dNf1n0mZg5bF7d9k6p3QyQyS
+      - email: "admin@local"
+        username: "admin"
+        userID: "1234567890"
+        # bcrypt-хэш пароля "admin" (оставь свой при необходимости)
+        hash: "$2y$10$ZPj6z6C9x6OQ5YcJzS3Z2uXb9t7D5dNf1n0mZg5bF7d9k6p3QyQyS"
