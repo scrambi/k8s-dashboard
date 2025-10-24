@@ -4,6 +4,8 @@ metadata:
   name: dex
   namespace: auth
 spec:
+  strategy:
+    type: Recreate
   replicas: 1
   selector:
     matchLabels: {app: dex}
