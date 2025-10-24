@@ -13,14 +13,32 @@ spec:
     spec:
       containers:
       - name: dex
-        image: ghcr.io/dexidp/dex:v2.38.0
-        args: ["serve", "/etc/dex/cfg/config.yaml"]
+        image: quay.io/dexidp/dex:v2.38.0
+        imagePullPolicy: IfNotPresent
+        command: ["/usr/local/bin/dex"]               # <-- ЯВНО задаём бинарник
+        args: ["serve", "/etc/dex/cfg/config.yaml"]   # <-- а это его аргументы
         ports:
         - name: http
           containerPort: 5556
         volumeMounts:
         - name: cfg
           mountPath: /etc/dex/cfg
+        readinessProbe:
+          httpGet: { path: /healthz, port: 5556 }
+          initialDelaySeconds: 3
+          periodSeconds: 5
+          failureThreshold: 12
+        livenessProbe:
+          httpGet: { path: /healthz, port: 5556 }
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 6
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            memory: 256Mi
       volumes:
       - name: cfg
         configMap:
