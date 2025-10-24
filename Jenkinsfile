@@ -11,14 +11,20 @@ pipeline {
     NS_DASH   = 'kubernetes-dashboard'
     NS_MLB    = 'metallb-system'
     NS_ING    = 'ingress-nginx'
+    NS_DEX    = 'auth'
+
     REL_DASH  = 'kubernetes-dashboard'
     TG_CHAT   = '180424264'
+
     DASH_HOST = 'dashboard.lan'
+    DEX_HOST  = 'dex.lan'
+
     PATH = "${WORKSPACE}/bin:${PATH}"
-    HELM_VERSION = 'v3.14.4'   
+    HELM_VERSION = 'v3.14.4'   // локальная установка без sudo
   }
 
   stages {
+
     stage('Checkout') {
       steps { checkout scm }
     }
@@ -45,8 +51,7 @@ pipeline {
               rm -rf "$TMP"
               helm version
             else
-              echo "helm already present:"
-              helm version
+              echo "helm already present:" && helm version
             fi
           '''
         }
@@ -60,7 +65,7 @@ pipeline {
             set -e
             kubectl create namespace $NS_MLB || true
 
-            helm repo add metallb https://metallb.github.io/metallb
+            helm repo add metallb https://metallb.github.io/metallb || true
             helm repo update
             helm upgrade --install metallb metallb/metallb -n $NS_MLB
 
@@ -105,8 +110,9 @@ pipeline {
         withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
           sh '''
             set -e
-            helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
-            helm repo update
+            helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx || true
+            helm repo update || true
+
             helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
               -n $NS_ING --create-namespace \
               --set controller.service.type=LoadBalancer
@@ -130,7 +136,24 @@ pipeline {
       }
     }
 
-    stage('Install/Update Kubernetes Dashboard (with robust retries)') {
+    stage('Install/Update Dex (OIDC)') {
+      steps {
+        withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+          sh '''
+            set -e
+            kubectl apply -f dex/00-namespace.yaml
+            kubectl -n $NS_DEX apply -f dex/10-configmap.yaml
+            kubectl -n $NS_DEX apply -f dex/20-deploy-svc.yaml
+            kubectl -n $NS_DEX apply -f dex/30-ingress.yaml
+            kubectl apply -f dex/40-rbac.yaml
+
+            kubectl -n $NS_DEX rollout status deploy/dex --timeout=180s
+          '''
+        }
+      }
+    }
+
+    stage('Install/Update Kubernetes Dashboard (with robust retries, OIDC)') {
       steps {
         withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
           sh '''
@@ -151,7 +174,8 @@ pipeline {
               for i in {1..10}; do
                 if helm upgrade --install $REL_DASH kubernetes-dashboard/kubernetes-dashboard \
                   -n $NS_DASH --create-namespace \
-                  -f dashboard/values.yaml; then
+                  -f dashboard/values.yaml \
+                  -f dashboard/values-oidc.yaml; then
                   break
                 fi
                 echo "[retry $i/10] helm upgrade failed, sleep 3s..."
@@ -164,7 +188,8 @@ pipeline {
                 if helm upgrade --install $REL_DASH kubernetes-dashboard \
                   --repo https://kubernetes.github.io/dashboard \
                   -n $NS_DASH --create-namespace \
-                  -f dashboard/values.yaml; then
+                  -f dashboard/values.yaml \
+                  -f dashboard/values-oidc.yaml; then
                   ok2=1; break
                 fi
                 echo "[retry $i/10] helm upgrade --repo failed, sleep 3s..."
@@ -180,7 +205,8 @@ pipeline {
                     if [ -n "$CHART" ]; then
                       if helm upgrade --install $REL_DASH "$CHART" \
                         -n $NS_DASH --create-namespace \
-                        -f dashboard/values.yaml; then
+                        -f dashboard/values.yaml \
+                        -f dashboard/values-oidc.yaml; then
                         break
                       fi
                     fi
@@ -191,11 +217,9 @@ pipeline {
               fi
             fi
 
-            kubectl apply -f dashboard/rbac-admin.yaml
-
-            kubectl -n $NS_DASH rollout status deploy/$REL_DASH-api --timeout=300s
-            kubectl -n $NS_DASH rollout status deploy/$REL_DASH-web --timeout=300s
             kubectl -n $NS_DASH rollout status deploy/$REL_DASH-auth --timeout=300s
+            kubectl -n $NS_DASH rollout status deploy/$REL_DASH-web  --timeout=300s
+            kubectl -n $NS_DASH rollout status deploy/$REL_DASH-api  --timeout=300s
           '''
         }
       }
@@ -211,17 +235,7 @@ pipeline {
             IP=$(cat ingress_ip.txt)
             echo "http://${IP}" > url_ip.txt
             echo "http://${DASH_HOST}" > url_host.txt
-          '''
-        }
-      }
-    }
-
-    stage('Prepare login token') {
-      steps {
-        withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
-          sh '''
-            set -e
-            kubectl -n $NS_DASH create token admin-user > token.txt
+            echo "http://${DEX_HOST}/dex" > dex_url.txt
           '''
         }
       }
@@ -236,11 +250,13 @@ pipeline {
           IP=$(cat ingress_ip.txt 2>/dev/null)
           URL_IP=$(cat url_ip.txt 2>/dev/null)
           URL_HOST=$(cat url_host.txt 2>/dev/null)
-          TOKEN_SHORT=$(head -c 40 token.txt 2>/dev/null)
+          URL_DEX=$(cat dex_url.txt 2>/dev/null)
+
+          MSG="✅ Dashboard + Dex OK: ${JOB_NAME} #${BUILD_NUMBER}\\nIngress IP: ${IP}\\nDashboard: ${URL_HOST} (или ${URL_IP})\\nDex: ${URL_DEX}\\n\\nНапоминание: добавь hosts:\\n${IP}  ${DASH_HOST}\\n${IP}  ${DEX_HOST}"
 
           curl -s -X POST -H 'Content-Type: application/json' \
             --data-binary @- "https://api.telegram.org/bot${TG}/sendMessage" <<EOF
-{"chat_id":"$TG_CHAT","text":"✅ Dashboard OK: ${JOB_NAME} #${BUILD_NUMBER}\nIngress IP: ${IP}\nURL (без DNS): ${URL_IP}\nURL (с hosts/DNS): ${URL_HOST}\n\nToken (первые 40 симв): ${TOKEN_SHORT}..."}
+{"chat_id":"$TG_CHAT","text":"${MSG}"}
 EOF
         '''
       }
