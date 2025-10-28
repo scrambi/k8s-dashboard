@@ -1,27 +1,18 @@
-# dashboard/values-oidc.yaml
 auth:
   enabled: true
-  provider:
-    type: oidc
-    oidc:
-      issuerUrl: https://dex.lan/dex
-      clientId: kubernetes-dashboard
-      clientSecret: dashboard-secret
-      redirectUri: https://dashboard.lan/oauth2/callback
-      scopes:
-        - openid
-        - profile
-        - email
-        - groups
-      # если Dex с самоподписанным сертификатом:
-      insecureSkipVerify: true
-      # или лучше так (если уже есть секрет с корневым сертификатом Dex):
-      # caSecret:
-      #   name: dex-ca
-      #   key: ca.crt
-
-# опционально: явно сообщить веб-части, что используем OIDC
-web:
-  extraEnv:
-    - name: KD_WEB_PREFERRED_LOGIN
-      value: oidc
+  settings:
+    providers:
+      - name: "Dex"
+        type: "oidc"
+        oidc:
+          issuer: "https://dex.lan/dex"
+          clientID: "kubernetes-dashboard"
+          clientSecret: "dashboard-secret"
+          redirectURI: "https://dashboard.lan/oauth2/callback"
+          scopes:
+            - openid
+            - profile
+            - email
+            - groups
+          # если самоподписанный/нестандартный TLS в пути
+          insecureSkipVerifyTLS: true
