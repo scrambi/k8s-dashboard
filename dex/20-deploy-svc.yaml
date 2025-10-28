@@ -4,8 +4,6 @@ metadata:
   name: dex
   namespace: auth
 spec:
-  strategy:
-    type: Recreate
   replicas: 1
   selector:
     matchLabels: {app: dex}
@@ -17,8 +15,8 @@ spec:
       - name: dex
         image: ghcr.io/dexidp/dex:v2.38.0
         imagePullPolicy: IfNotPresent
-        command: ["/usr/local/bin/dex"]               
-        args: ["serve", "/etc/dex/cfg/config.yaml"]   
+        command: ["/usr/local/bin/dex"]
+        args: ["serve", "/etc/dex/cfg/config.yaml"]
         ports:
         - name: http
           containerPort: 5556
@@ -26,12 +24,16 @@ spec:
         - name: cfg
           mountPath: /etc/dex/cfg
         readinessProbe:
-          httpGet: { path: /healthz, port: 5556 }
+          httpGet:
+            path: /healthz
+            port: 5556
           initialDelaySeconds: 3
           periodSeconds: 5
           failureThreshold: 12
         livenessProbe:
-          httpGet: { path: /healthz, port: 5556 }
+          httpGet:
+            path: /healthz
+            port: 5556
           initialDelaySeconds: 10
           periodSeconds: 10
           failureThreshold: 6
