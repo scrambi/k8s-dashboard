@@ -1,10 +1,12 @@
 auth:
   enabled: true
-  extraArgs:
-    - --oidc-issuer-url=https://dex.lan/dex
-    - --oidc-client-id=kubernetes-dashboard
-    - --oidc-client-secret=dashboard-secret
-    - --oidc-scopes=openid,profile,email,groups
-    - --oidc-redirect-uri=https://dashboard.lan/oauth2/callback
-    # опционально, если Dex будет по https с самоподписанным
-    # - --oidc-insecure-skip-verify=true
+  strategy: oauth2
+  oauth2:
+    clientID: kubernetes-dashboard
+    clientSecret: dashboard-secret
+    issuerURL: https://dex.lan/dex
+    redirectURI: https://dashboard.lan/oauth2/callback
+    scopes:
+      - openid
+      - profile
+      - email
