@@ -4,16 +4,22 @@ metadata:
   name: dex
   namespace: auth
   annotations:
-    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    kubernetes.io/ingress.class: "nginx"
 spec:
   ingressClassName: nginx
+  tls:
+    - hosts:
+        - dex.lan
+      secretName: lan-tls   # секрет с сертификатом в namespace auth
   rules:
-  - host: dex.lan
-    http:
-      paths:
-      - path: /dex
-        pathType: Prefix
-        backend:
-          service:
-            name: dex
-            port: { number: 5556 }
+    - host: dex.lan
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dex
+                port:
+                  number: 5556
+
