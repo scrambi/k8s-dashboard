@@ -234,8 +234,8 @@ pipeline {
 
             IP=$(cat ingress_ip.txt)
             echo "http://${IP}" > url_ip.txt
-            echo "http://${DASH_HOST}" > url_host.txt
-            echo "http://${DEX_HOST}/dex" > dex_url.txt
+            echo "https://${DASH_HOST}" > url_host.txt
+            echo "https://${DEX_HOST}/dex" > dex_url.txt
           '''
         }
       }
