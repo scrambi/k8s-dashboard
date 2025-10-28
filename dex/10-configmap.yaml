@@ -6,12 +6,15 @@ metadata:
 data:
   config.yaml: |
     issuer: "https://dex.lan/dex"
+
     storage:
       type: "memory"
-    web:
-      https: "0.0.0.0:5556"
 
-    # включаем встроенную БД пользователей
+    web:
+      # Dex слушает HTTP внутри, TLS делает Ingress
+      http: "0.0.0.0:5556"
+
+    # локальная БД пользователей
     enablePasswordDB: true
 
     # OIDC-клиент для Kubernetes Dashboard
@@ -22,10 +25,10 @@ data:
         redirectURIs:
           - "https://dashboard.lan/oauth2/callback"
 
-    # Тестовый пользователь (логин: admin@local / пароль: admin — если хэш соответствует)
+    # тестовый пользователь (admin@local / admin)
     staticPasswords:
       - email: "admin@local"
         username: "admin"
         userID: "1234567890"
-        # bcrypt-хэш пароля "admin" (оставь свой при необходимости)
+        # bcrypt-хэш пароля "admin"
         hash: "$2y$10$ZPj6z6C9x6OQ5YcJzS3Z2uXb9t7D5dNf1n0mZg5bF7d9k6p3QyQyS"
