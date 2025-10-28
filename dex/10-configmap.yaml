@@ -23,7 +23,7 @@ data:
         name: "Kubernetes Dashboard"
         secret: "dashboard-secret"
         redirectURIs:
-          - "https://dashboard.lan/oauth2/callback"
+          - "https://dashboard.lan/#/login"
 
     # тестовый пользователь (admin@local / admin)
     staticPasswords:
