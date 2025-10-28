@@ -5,7 +5,7 @@ metadata:
   namespace: auth
 data:
   config.yaml: |
-    issuer: "http://dex.lan/dex"
+    issuer: "https://dex.lan/dex"
     storage:
       type: "memory"
     web:
@@ -20,7 +20,7 @@ data:
         name: "Kubernetes Dashboard"
         secret: "dashboard-secret"
         redirectURIs:
-          - "http://dashboard.lan/oauth2/callback"
+          - "https://dashboard.lan/oauth2/callback"
 
     # Тестовый пользователь (логин: admin@local / пароль: admin — если хэш соответствует)
     staticPasswords:
