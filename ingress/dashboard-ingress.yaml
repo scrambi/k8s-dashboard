@@ -4,12 +4,12 @@ metadata:
   name: dashboard
   namespace: kubernetes-dashboard
   annotations:
-    kubernetes.io/ingress.class: nginx
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
 spec:
   tls:
-    - hosts:
-        - dashboard.lan
+    - hosts: ["dashboard.lan"]
       secretName: dashboard-tls
   rules:
     - host: dashboard.lan
