@@ -9,10 +9,5 @@ auth:
           clientID: "kubernetes-dashboard"
           clientSecret: "dashboard-secret"
           redirectURI: "https://dashboard.lan/oauth2/callback"
-          scopes:
-            - openid
-            - profile
-            - email
-            - groups
-          # если самоподписанный/нестандартный TLS в пути
+          scopes: [openid, profile, email, groups]
           insecureSkipVerifyTLS: true
