@@ -6,50 +6,66 @@ metadata:
 spec:
   replicas: 1
   selector:
-    matchLabels: {app: dex}
+    matchLabels:
+      app: dex
   template:
     metadata:
-      labels: {app: dex}
+      labels:
+        app: dex
     spec:
       containers:
-      - name: dex
-        image: ghcr.io/dexidp/dex:v2.38.0
-        imagePullPolicy: IfNotPresent
-        command: ["/usr/local/bin/dex"]
-        args: ["serve", "/etc/dex/cfg/config.yaml"]
-        ports:
-        - name: http
-          containerPort: 5556
-        volumeMounts:
-        - name: cfg
-          mountPath: /etc/dex/cfg
-        readinessProbe:
-          httpGet:
-            path: /healthz
-            port: 5556
-          initialDelaySeconds: 3
-          periodSeconds: 5
-          failureThreshold: 12
-        livenessProbe:
-          httpGet:
-            path: /healthz
-            port: 5556
-          initialDelaySeconds: 10
-          periodSeconds: 10
-          failureThreshold: 6
-        resources:
-          requests:
-            cpu: 50m
-            memory: 64Mi
-          limits:
-            memory: 256Mi
+        - name: dex
+          image: ghcr.io/dexidp/dex:v2.38.0
+          imagePullPolicy: IfNotPresent
+          command: ["/usr/local/bin/dex"]
+          args: ["serve", "/etc/dex/cfg/config.yaml"]
+          ports:
+            - name: http
+              containerPort: 5556
+          volumeMounts:
+            - name: cfg
+              mountPath: /etc/dex/cfg
+
+          # Пробы: у Dex healthz под префиксом /dex
+          startupProbe:
+            httpGet:
+              path: /dex/healthz
+              port: 5556
+              scheme: HTTP
+            periodSeconds: 2
+            failureThreshold: 30
+
+          readinessProbe:
+            httpGet:
+              path: /dex/healthz
+              port: 5556
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 12
+
+          livenessProbe:
+            httpGet:
+              path: /dex/healthz
+              port: 5556
+              scheme: HTTP
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 6
+
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
       volumes:
-      - name: cfg
-        configMap:
-          name: dex-config
-          items:
-          - key: config.yaml
-            path: config.yaml
+        - name: cfg
+          configMap:
+            name: dex-config
+            items:
+              - key: config.yaml
+                path: config.yaml
 ---
 apiVersion: v1
 kind: Service
@@ -58,8 +74,9 @@ metadata:
   namespace: auth
 spec:
   type: ClusterIP
-  selector: {app: dex}
+  selector:
+    app: dex
   ports:
-  - name: http
-    port: 5556
-    targetPort: 5556
+    - name: http
+      port: 5556
+      targetPort: 5556
